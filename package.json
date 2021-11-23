@@ -1,0 +1,45 @@
+{
+  "name": "@wum.bo/api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Wum.bo GraphQL API",
+  "keywords": [
+    "graphql-codegen"
+  ],
+  "license": "MIT",
+  "author": "Wum.bo Inc.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsup-node --watch --onSuccess \"cross-env NODE_ENV=development node dist/index.js\" src/index.ts",
+    "start": "cross-env NODE_ENV=production node dist/index.js",
+    "test": "cross-env NODE_ENV=test tap --node-arg=--require=esbuild-register",
+    "bootstrap": "npm run build && node dist/bootstrap.js"
+  },
+  "dependencies": {
+    "@bonfida/spl-name-service": "0.1.12",
+    "@solana/web3.js": "^1.29.0",
+    "@types/auth0": "^2.33.5",
+    "@types/axios": "^0.14.0",
+    "@types/redis": "^2.8.31",
+    "@types/twitter": "^1.7.1",
+    "auth0": "^2.36.2",
+    "axios": "^0.21.4",
+    "fastify": "^3.19.2",
+    "fastify-cors": "^6.0.2",
+    "graphql": "^15.5.1",
+    "redis": "^3.1.2",
+    "twitter": "^1.7.1"
+  },
+  "devDependencies": {
+    "@graphql-typed-document-node/core": "^3.1.0",
+    "@types/busboy": "^0.2.4",
+    "@types/node": "^16.4.6",
+    "@types/tap": "^15.0.5",
+    "cross-env": "^7.0.3",
+    "esbuild-register": "^2.6.0",
+    "tap": "^15.0.9",
+    "tsup": "^4.12.5",
+    "typescript": "^4.3.5"
+  }
+}
