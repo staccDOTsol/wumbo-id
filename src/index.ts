@@ -1,19 +1,21 @@
-import { NAME_PROGRAM_ID } from '@bonfida/spl-name-service';
-import { Connection, Keypair, PublicKey, Transaction } from '@solana/web3.js';
+import { NameRegistryState, NAME_PROGRAM_ID } from '@bonfida/spl-name-service';
+import { Account, Connection, Keypair, PublicKey, Signer, Transaction, TransactionInstruction } from '@solana/web3.js';
+import { ICreateSocialTokenArgs, SplTokenCollective } from '@strata-foundation/spl-token-collective';
+import { deserializeUnchecked } from 'borsh';
 import Fastify from 'fastify';
-import redis from "redis";
-import { auth0 } from './auth0';
-import { createVerifiedTwitterRegistry } from './nameServiceTwitter';
-import { twitterClient } from './twitter';
+import { auth0 } from './auth0Setup';
+import { createVerifiedTwitterRegistry, getTwitterRegistryKey } from './nameServiceTwitter';
+import { twitterClient } from './twitterSetup';
+import { Wallet, Provider } from "@project-serum/anchor";
+import { BigInstructionResult } from "@strata-foundation/spl-utils";
 
 const connection = new Connection(process.env.SOLANA_URL!);
 const twitterServiceAccount = Keypair.fromSecretKey(new Uint8Array(JSON.parse(process.env.TWITTER_SERVICE_ACCOUNT!)));
+const payerServiceAccount = Keypair.fromSecretKey(new Uint8Array(JSON.parse(process.env.PAYER_SERVICE_ACCOUNT!)));
+const provider = new Provider(connection, new Wallet(payerServiceAccount), {
+  commitment: "confirmed"
+});
 const twitterTld = new PublicKey(process.env.TWITTER_TLD!)
-
-export const redisClient = redis.createClient({
-  host: process.env["REDIS_HOST"] || "localhost",
-  port: Number(process.env["REDIS_PORT"] || "6379")
-})
 
 export const app = Fastify()
 
@@ -23,25 +25,45 @@ app.register(require('fastify-cors'), {
   }
 })
 
-app.post<{ Body: { pubkey: string, code: string, redirectUri: string, twitterHandle: string } }>('/registrar/twitter-oauth', async (req) => {
-  const { pubkey, code, redirectUri, twitterHandle } = req.body;
+app.get("/config", async () => {
+  return {
+    tlds: {
+      twitter: twitterTld.toBase58()
+    },
+    verifiers: {
+      twitter: twitterServiceAccount.publicKey.toBase58()
+    }
+  }
+});
 
-  const { access_token: accessToken } =
-    (await auth0.oauth?.authorizationCodeGrant({
-      code,
-      redirect_uri: redirectUri,
-    }) || {});
-  const user = await auth0.users?.getInfo(accessToken!);
-  // @ts-ignore
-  const { sub } = user;
-  const twitterUser: any = await twitterClient.get("users/show", {
-    user_id: sub.replace("twitter|", ""),
-  });
-
-  if (twitterUser.screen_name != twitterHandle) {
-    throw new Error(`Screen name does ${twitterUser.screen_name} not match the screen name provided ${twitterHandle}`);
+interface IClaimHandleArgs { pubkey: string, code?: string, redirectUri?: string, twitterHandle: string }
+async function claimHandleInstructions({ pubkey, code, redirectUri, twitterHandle }: IClaimHandleArgs): Promise<{ instructions: TransactionInstruction[], signers: Signer[] }> {
+  const name = await getTwitterRegistry(twitterHandle);
+  if (name) {
+    return {
+      instructions: [],
+      signers: []
+    }
   }
 
+  if (!process.env.IS_DEV) {
+    const { access_token: accessToken } =
+    (await auth0.oauth?.authorizationCodeGrant({
+      code: code!,
+      redirect_uri: redirectUri!,
+    }) || {});
+    const user = await auth0.users?.getInfo(accessToken!);
+    // @ts-ignore
+    const { sub } = user;
+    const twitterUser: any = await twitterClient.get("users/show", {
+      user_id: sub.replace("twitter|", ""),
+    });
+
+    if (twitterUser.screen_name != twitterHandle) {
+      throw new Error(`Screen name does ${twitterUser.screen_name} not match the screen name provided ${twitterHandle}`);
+    }
+  }
+  
   const pubKey = new PublicKey(pubkey)
   const instructions = await createVerifiedTwitterRegistry(
     connection,
@@ -54,15 +76,125 @@ app.post<{ Body: { pubkey: string, code: string, redirectUri: string, twitterHan
     twitterTld
   );
 
-  const transaction = new Transaction({ recentBlockhash: (await connection.getRecentBlockhash()).blockhash, feePayer: pubKey })
+  return {
+    instructions,
+    signers: [twitterServiceAccount]
+  }
+}
+
+app.post<{ Body: IClaimHandleArgs }>('/twitter/oauth', async (req) => {
+  const { instructions, signers } = await claimHandleInstructions(req.body);
+
+  const transaction = new Transaction({ recentBlockhash: (await connection.getRecentBlockhash()).blockhash, feePayer: new PublicKey(req.body.pubkey) })
   transaction.add(...instructions);
   transaction.partialSign(twitterServiceAccount);
 
-  return transaction.serialize({ requireAllSignatures: false, verifySignatures: false }).toJSON()
+  // https://github.com/solana-labs/solana/issues/21722
+  // I wouldn't wish this bug on my worst enemies. If we don't do this hack, any time our txns are signed, then serialized, then deserialized,
+  // then reserialized, they will break.
+  const fixedTx = Transaction.from(transaction.serialize({ requireAllSignatures: false }));
+  fixedTx.partialSign(...signers, payerServiceAccount);
+  return fixedTx.serialize({ requireAllSignatures: false, verifySignatures: false }).toJSON()
+})
+
+async function getTwitterRegistry(twitterHandle: string): Promise<NameRegistryState | undefined> {
+  const name = await getTwitterRegistryKey(twitterHandle, twitterTld);
+  const acct = await connection.getAccountInfo(name);
+
+  if (acct) {
+    return deserializeUnchecked(
+      NameRegistryState.schema,
+      NameRegistryState,
+      acct.data
+    );
+  }
+}
+
+type Truthy<T> = T extends false | '' | 0 | null | undefined ? never : T; // from lodash
+
+function truthy<T>(value: T): value is Truthy<T> {
+  return !!value;
+}
+
+app.post<{ Body: IClaimHandleArgs }>('/twitter/claim-or-create', async (req) => {
+  const { pubkey, twitterHandle } = req.body;
+  const owner = new PublicKey(pubkey);
+  const { instructions: handleInstructions, signers: handleSigners } = await claimHandleInstructions(req.body);
+  const tokenCollectiveSdk = await SplTokenCollective.init(provider);
+
+  const name = await getTwitterRegistryKey(twitterHandle, twitterTld);
+  const claimedTokenRefKey = (await SplTokenCollective.ownerTokenRefKey({ owner }))[0];
+  const unclaimedTokenRefKey = (await SplTokenCollective.ownerTokenRefKey({ name, mint: SplTokenCollective.OPEN_COLLECTIVE_MINT_ID }))[0];
+  const claimedTokenRef = await tokenCollectiveSdk.getTokenRef(claimedTokenRefKey);
+  const unclaimedTokenRef = await tokenCollectiveSdk.getTokenRef(unclaimedTokenRefKey);
+
+  let instructionResult: BigInstructionResult<any> = {
+    instructions: [],
+    signers: [],
+    output: null
+  };
+  const symbol = twitterHandle.slice(0, 10);
+  // Need to create from scratch
+  if (!claimedTokenRef && !unclaimedTokenRef) {
+    const args: ICreateSocialTokenArgs = {
+      owner,
+      metadata: {
+        name: twitterHandle,
+        symbol,
+      },
+      tokenBondingParams: {
+        buyBaseRoyaltyPercentage: 10,
+        buyTargetRoyaltyPercentage: 0,
+        sellBaseRoyaltyPercentage: 0,
+        sellTargetRoyaltyPercentage: 0,
+      },
+    };
+
+    instructionResult = await tokenCollectiveSdk!.createSocialTokenInstructions(
+      args
+    );
+  } else if (!claimedTokenRef) {
+    const regularInstructionResult = await tokenCollectiveSdk!.claimSocialTokenInstructions({
+      owner,
+      tokenRef: claimedTokenRefKey,
+      symbol
+    });
+    instructionResult = {
+      instructions: [regularInstructionResult.instructions],
+      signers: [regularInstructionResult.signers],
+      output: null
+    }
+  }
+  const instructionGroups = [handleInstructions, ...instructionResult.instructions];
+  const signerGroups = [handleSigners, ...instructionResult.signers];
+
+  const recentBlockhash = (await provider.connection.getRecentBlockhash('confirmed')).blockhash
+  const txns = instructionGroups.map((instructions, index) => {
+    const signers = signerGroups[index];
+    if (instructions.length > 0) {
+      const tx = new Transaction({
+        feePayer: payerServiceAccount.publicKey,
+        recentBlockhash
+      });
+      tx.add(...instructions)
+      // https://github.com/solana-labs/solana/issues/21722
+      // I wouldn't wish this bug on my worst enemies. If we don't do this hack, any time our txns are signed, then serialized, then deserialized,
+      // then reserialized, they will break.
+      const fixedTx = Transaction.from(tx.serialize({ requireAllSignatures: false }));
+      fixedTx.partialSign(...signers, payerServiceAccount);
+      return fixedTx;
+    }
+  }).filter(truthy)
+
+  return txns.map(transaction => transaction.serialize({ requireAllSignatures: false, verifySignatures: true }).toJSON())
 })
 
 app.get('/', async () => {
   return { healthy: 'true' }
 })
 
-app.listen(Number(process.env["PORT"] || "8080"), '0.0.0.0')
+app.listen(Number(process.env["PORT"] || "8080"), '0.0.0.0').catch(e => {
+  console.error(e);
+  console.error(e.stack);
+  process.exit(1);
+})

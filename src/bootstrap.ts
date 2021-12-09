@@ -16,7 +16,7 @@ const serviceAccount = Keypair.fromSecretKey(
 
 async function run(): Promise<void> {
   const connection = new Connection(process.env.SOLANA_URL!);
-  const name = `wumbo-twitter`;
+  const name = `wumbo-twitter-dev`;
   const nameTld = await getNameAccountKey(await getHashedName(name))
   console.log(`Going to create tld ${name} at ${nameTld.toBase58()}`);
   if (!(await connection.getAccountInfo(nameTld))) {

@@ -75,7 +75,7 @@ export async function createVerifiedTwitterRegistry(
       payerKey,
       hashedTwitterHandle,
       new Numberu64(await connection.getMinimumBalanceForRentExemption(space)),
-      space,
+      new Numberu32(space),
       undefined,
       twitterRootParentRegistryKey,
       twitterVerificationAuthority // Twitter authority acts as owner of the parent for all user-facing registries
@@ -135,7 +135,7 @@ export async function createReverseTwitterRegistry(
           reverseTwitterRegistryStateBuff.length
         )
       ),
-      reverseTwitterRegistryStateBuff.length,
+      new Numberu32(reverseTwitterRegistryStateBuff.length),
       twitterVerificationAuthority, // Twitter authority acts as class for all reverse-lookup registries
       twitterRootParentRegistryKey, // Reverse registries are also children of the root
       twitterVerificationAuthority
