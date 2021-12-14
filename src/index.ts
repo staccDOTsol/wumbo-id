@@ -138,6 +138,7 @@ app.post<{ Body: IClaimHandleArgs }>('/twitter/claim-or-create', async (req) => 
   if (!claimedTokenRef && !unclaimedTokenRef) {
     const args: ICreateSocialTokenArgs = {
       owner,
+      authority: owner,
       metadata: {
         name: twitterHandle,
         symbol,
@@ -156,6 +157,7 @@ app.post<{ Body: IClaimHandleArgs }>('/twitter/claim-or-create', async (req) => 
   } else if (!claimedTokenRef) {
     const regularInstructionResult = await tokenCollectiveSdk!.claimSocialTokenInstructions({
       owner,
+      authority: owner,
       tokenRef: claimedTokenRefKey,
       symbol
     });
