@@ -16,7 +16,7 @@ const provider = new Provider(connection, new Wallet(payerServiceAccount), {
   commitment: "confirmed"
 });
 const twitterTld = new PublicKey(process.env.TWITTER_TLD!)
-
+console.log("Using payer: ", payerServiceAccount.publicKey.toBase58())
 export const app = Fastify()
 
 app.register(require('fastify-cors'), {
