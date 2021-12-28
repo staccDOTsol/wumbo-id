@@ -158,8 +158,9 @@ app.post<{ Body: IClaimHandleArgs }>('/twitter/claim-or-create', async (req) => 
     const regularInstructionResult = await tokenCollectiveSdk!.claimSocialTokenInstructions({
       owner,
       authority: owner,
-      tokenRef: claimedTokenRefKey,
-      symbol
+      tokenRef: unclaimedTokenRefKey,
+      symbol,
+      ignoreMissingName: true
     });
     instructionResult = {
       instructions: [regularInstructionResult.instructions],
