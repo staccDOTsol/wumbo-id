@@ -69,8 +69,8 @@ async function claimHandleInstructions({ pubkey, code, redirectUri, twitterHandl
     connection,
     twitterHandle,
     pubKey,
-    1000,
-    pubKey,
+    32,
+    payerServiceAccount.publicKey,
     NAME_PROGRAM_ID,
     twitterServiceAccount.publicKey,
     twitterTld
@@ -85,7 +85,7 @@ async function claimHandleInstructions({ pubkey, code, redirectUri, twitterHandl
 app.post<{ Body: IClaimHandleArgs }>('/twitter/oauth', async (req) => {
   const { instructions, signers } = await claimHandleInstructions(req.body);
 
-  const transaction = new Transaction({ recentBlockhash: (await connection.getRecentBlockhash()).blockhash, feePayer: new PublicKey(req.body.pubkey) })
+  const transaction = new Transaction({ recentBlockhash: (await connection.getRecentBlockhash()).blockhash, feePayer: payerServiceAccount.publicKey })
   transaction.add(...instructions);
   transaction.partialSign(twitterServiceAccount);
 
