@@ -60,6 +60,7 @@ interface IClaimHandleArgs {
   redirectUri?: string;
   twitterHandle: string;
 }
+
 async function claimHandleInstructions({
   pubkey,
   code,
