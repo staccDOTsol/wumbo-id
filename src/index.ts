@@ -34,6 +34,9 @@ const provider = new Provider(connection, new Wallet(payerServiceAccount), {
   commitment: "confirmed",
 });
 const twitterTld = new PublicKey(process.env.TWITTER_TLD!);
+const feeWallet = new PublicKey(process.env.FEE_WALLET!);
+const goLiveUnixTime = Number(process.env.GO_LIVE!);
+
 console.log("Using payer: ", payerServiceAccount.publicKey.toBase58());
 export const app = Fastify();
 
@@ -51,6 +54,8 @@ app.get("/config", async () => {
     verifiers: {
       twitter: twitterServiceAccount.publicKey.toBase58(),
     },
+    feeWallet: feeWallet.toBase58(),
+    goLiveUnixTime
   };
 });
 
