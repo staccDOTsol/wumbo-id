@@ -121,7 +121,6 @@ export async function createReverseTwitterRegistry(
       twitterHandle,
     })
   );
-  console.log(twitterHandle, reverseRegistryKey.toBase58());
 
   return [
     createInstruction(

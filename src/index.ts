@@ -198,6 +198,8 @@ app.post<{ Body: IClaimHandleArgs }>(
     const symbol = twitterHandle.slice(0, 10);
     // Need to create from scratch
     if (!claimedTokenRef && !unclaimedTokenRef) {
+      const goLiveDate = new Date(0);
+      goLiveDate.setUTCSeconds(goLiveUnixTime);
       const args: ICreateSocialTokenArgs = {
         owner,
         authority: owner,
@@ -206,8 +208,9 @@ app.post<{ Body: IClaimHandleArgs }>(
           symbol,
         },
         tokenBondingParams: {
-          buyBaseRoyaltyPercentage: 10,
-          buyTargetRoyaltyPercentage: 0,
+          goLiveDate,
+          buyBaseRoyaltyPercentage: 0,
+          buyTargetRoyaltyPercentage: 5,
           sellBaseRoyaltyPercentage: 0,
           sellTargetRoyaltyPercentage: 0,
         },
