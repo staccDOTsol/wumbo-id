@@ -234,6 +234,10 @@ app.post<{ Body: IClaimHandleArgs }>(
           buyTargetRoyaltyPercentage: 5,
           sellBaseRoyaltyPercentage: 0,
           sellTargetRoyaltyPercentage: 0,
+          buyBaseRoyaltiesOwner: owner,
+          sellBaseRoyaltiesOwner: owner,
+          buyTargetRoyaltiesOwner: owner,
+          sellTargetRoyaltiesOwner: owner
         },
       };
 
@@ -246,7 +250,7 @@ app.post<{ Body: IClaimHandleArgs }>(
           authority: owner,
           tokenRef: unclaimedTokenRefKey,
           symbol,
-          ignoreMissingName: true,
+          ignoreMissingName: true
         });
       instructionResult = {
         instructions: [regularInstructionResult.instructions],
