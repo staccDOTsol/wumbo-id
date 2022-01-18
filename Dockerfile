@@ -9,7 +9,7 @@ COPY yarn.lock ./
 RUN yarn install
 RUN rm -f .npmrc
 
-COPY . .
+COPY src src
 COPY tsconfig.json tsconfig.json
 
 RUN yarn run build

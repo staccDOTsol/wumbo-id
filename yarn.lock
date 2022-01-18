@@ -557,10 +557,10 @@
     superstruct "^0.14.2"
     tweetnacl "^1.0.0"
 
-"@strata-foundation/spl-token-bonding@^2.0.0":
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/@strata-foundation/spl-token-bonding/-/spl-token-bonding-2.0.0.tgz#e85a7ced0c8afcce15fcf05c4f49b6bbac659f80"
-  integrity sha512-l/pwENpCnDsLXzj7z0DVwqjKg1N7qV6mK1J0VDskSMta96rDz/fFAep8PuQqskHPU2WA+Zf2FV66BsQ7VpGniw==
+"@strata-foundation/spl-token-bonding@^2.0.7-alpha.15+655f970":
+  version "2.0.7-alpha.15"
+  resolved "https://registry.yarnpkg.com/@strata-foundation/spl-token-bonding/-/spl-token-bonding-2.0.7-alpha.15.tgz#708f1fd1eaa5798d9c0ffb9081d442f96b95a0a2"
+  integrity sha512-+N3BPMOXGbZ6P7tLbi6AvvZcXMxtj0j2sGIrW+MH9FUl8jrjvSqj/KPd31fQrdcQ2MkxCyYWRrUV+YX7cQiW4g==
   dependencies:
     "@project-serum/anchor" "^0.18.0"
     "@project-serum/common" "^0.0.1-beta.3"
@@ -569,25 +569,25 @@
     bn.js "^5.2.0"
     copyfiles "^2.4.1"
 
-"@strata-foundation/spl-token-collective@^2.0.0":
-  version "2.0.1"
-  resolved "https://registry.yarnpkg.com/@strata-foundation/spl-token-collective/-/spl-token-collective-2.0.1.tgz#2d28bbe610847209db4c21bd626b15582bafe29d"
-  integrity sha512-Acxz7jPBeScb/uoWgyDVJ2iLZJqB/38TahSWF0eOiaVCD8MxccJvZOmgf0dJcGHS7Ui9adaRXHyxu8pNcmze0A==
+"@strata-foundation/spl-token-collective@2.0.7-alpha.15+655f970":
+  version "2.0.7-alpha.15"
+  resolved "https://registry.yarnpkg.com/@strata-foundation/spl-token-collective/-/spl-token-collective-2.0.7-alpha.15.tgz#799d5e1e29e59c4878651632c0a69a5e3b68d51e"
+  integrity sha512-KtUgtblGN3KEmlL587tKRhSvg8CBV+j7eJlOppZXTtahkOz+enTdW1a1vGdV8OxLfOxhpFCQXO4qeYGvzmHnvQ==
   dependencies:
     "@bonfida/spl-name-service" "^0.1.22"
     "@project-serum/anchor" "^0.18.0"
     "@project-serum/common" "^0.0.1-beta.3"
     "@solana/web3.js" "^1.29.2"
-    "@strata-foundation/spl-token-bonding" "^2.0.0"
-    "@strata-foundation/spl-token-staking" "^2.0.0"
+    "@strata-foundation/spl-token-bonding" "^2.0.7-alpha.15+655f970"
+    "@strata-foundation/spl-token-staking" "^2.0.6"
     "@strata-foundation/spl-utils" "^2.0.0"
     bn.js "^5.2.0"
     copyfiles "^2.4.1"
 
-"@strata-foundation/spl-token-staking@^2.0.0":
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/@strata-foundation/spl-token-staking/-/spl-token-staking-2.0.0.tgz#6f598aa449bfefc785583c274523aceb0e3e9a52"
-  integrity sha512-5X0q2rJV6dzEf89Yt323C0tfSMOhhiSpU6Lh7vDqXxB2KV4eWuVbcWpfWujZIQClhxHNVc8r/6exDIu6h/K/zQ==
+"@strata-foundation/spl-token-staking@^2.0.6":
+  version "2.0.6"
+  resolved "https://registry.yarnpkg.com/@strata-foundation/spl-token-staking/-/spl-token-staking-2.0.6.tgz#66ea3fee9911d42cb49ce2d7935f1ce7f97f01c7"
+  integrity sha512-+wv55r/e/ytVpvp9vsCNvdwvyXtFYP786yru8IjpnKZnxA3zbpKEBr90Bh7oD6xdiycZOXtqmyz89ywAcvpfuA==
   dependencies:
     "@project-serum/common" "^0.0.1-beta.3"
     "@solana/web3.js" "^1.29.2"

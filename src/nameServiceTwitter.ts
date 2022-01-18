@@ -65,7 +65,6 @@ export async function createVerifiedTwitterRegistry(
     twitterRootParentRegistryKey
   );
 
-
   let instructions = [
     createInstruction(
       nameProgramId,
@@ -122,6 +121,7 @@ export async function createReverseTwitterRegistry(
       twitterHandle,
     })
   );
+
   return [
     createInstruction(
       nameProgramId,
