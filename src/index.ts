@@ -148,7 +148,9 @@ app.post<{ Body: IClaimHandleArgs }>("/twitter/oauth", async (req) => {
   const fixedTx = Transaction.from(
     transaction.serialize({ requireAllSignatures: false })
   );
-  fixedTx.partialSign(...signers);
+  if (signers.length > 0) {
+    fixedTx.partialSign(...signers);
+  }
   if (hasFunds) {
     fixedTx.partialSign(payerServiceAccount);
   }
@@ -276,7 +278,9 @@ app.post<{ Body: IClaimHandleArgs }>(
           const fixedTx = Transaction.from(
             tx.serialize({ requireAllSignatures: false })
           );
-          fixedTx.partialSign(...signers);
+          if (signers.length > 0) {
+            fixedTx.partialSign(...signers);
+          }
           if (hasFunds) {
             fixedTx.partialSign(payerServiceAccount);
           }
