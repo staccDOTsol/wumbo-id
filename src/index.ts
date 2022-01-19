@@ -238,10 +238,10 @@ app.post<{ Body: IClaimHandleArgs }>(
           buyTargetRoyaltyPercentage: 5,
           sellBaseRoyaltyPercentage: 0,
           sellTargetRoyaltyPercentage: 0,
-          // buyBaseRoyaltiesOwner: owner,
-          // sellBaseRoyaltiesOwner: owner,
-          // buyTargetRoyaltiesOwner: owner,
-          // sellTargetRoyaltiesOwner: owner
+          buyBaseRoyaltiesOwner: owner,
+          sellBaseRoyaltiesOwner: owner,
+          buyTargetRoyaltiesOwner: owner,
+          sellTargetRoyaltiesOwner: owner
         },
       };
 
