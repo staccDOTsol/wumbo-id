@@ -67,6 +67,13 @@ interface IClaimHandleArgs {
   twitterHandle: string;
 }
 
+
+async function hasEnoughFunds(publicKey: PublicKey): Promise<boolean> {
+  const lamports = (await connection.getAccountInfo(publicKey))?.lamports;
+
+  return (lamports || 0) >= MIN_LAMPORTS
+}
+
 async function claimHandleInstructions({
   pubkey,
   code,
@@ -105,14 +112,17 @@ async function claimHandleInstructions({
   }
 
   const pubKey = new PublicKey(pubkey);
+  const hasFunds = await hasEnoughFunds(payerServiceAccount.publicKey);
+  const payer = hasFunds ? payerServiceAccount.publicKey : pubKey;
+
   const instructions = await createVerifiedTwitterRegistry(
     connection,
     twitterHandle,
     pubKey,
     32,
-    payerServiceAccount.publicKey,
+    payer,
     NAME_PROGRAM_ID,
-    twitterServiceAccount.publicKey,
+    payer,
     twitterTld
   );
 
@@ -120,12 +130,6 @@ async function claimHandleInstructions({
     instructions,
     signers: [twitterServiceAccount],
   };
-}
-
-async function hasEnoughFunds(publicKey: PublicKey): Promise<boolean> {
-  const lamports = (await connection.getAccountInfo(publicKey))?.lamports;
-
-  return (lamports || 0) >= MIN_LAMPORTS
 }
 
 app.post<{ Body: IClaimHandleArgs }>("/twitter/oauth", async (req) => {
@@ -151,7 +155,7 @@ app.post<{ Body: IClaimHandleArgs }>("/twitter/oauth", async (req) => {
   if (signers.length > 0) {
     fixedTx.partialSign(...signers);
   }
-  if (hasFunds) {
+  if (transaction.signatures.some(sig => sig.publicKey.equals(payerServiceAccount.publicKey))) {
     fixedTx.partialSign(payerServiceAccount);
   }
   return fixedTx
@@ -234,10 +238,10 @@ app.post<{ Body: IClaimHandleArgs }>(
           buyTargetRoyaltyPercentage: 5,
           sellBaseRoyaltyPercentage: 0,
           sellTargetRoyaltyPercentage: 0,
-          buyBaseRoyaltiesOwner: owner,
-          sellBaseRoyaltiesOwner: owner,
-          buyTargetRoyaltiesOwner: owner,
-          sellTargetRoyaltiesOwner: owner
+          // buyBaseRoyaltiesOwner: owner,
+          // sellBaseRoyaltiesOwner: owner,
+          // buyTargetRoyaltiesOwner: owner,
+          // sellTargetRoyaltiesOwner: owner
         },
       };
 
@@ -285,7 +289,7 @@ app.post<{ Body: IClaimHandleArgs }>(
           if (signers.length > 0) {
             fixedTx.partialSign(...signers);
           }
-          if (hasFunds) {
+          if (tx.signatures.some(sig => sig.publicKey.equals(payerServiceAccount.publicKey))) {
             fixedTx.partialSign(payerServiceAccount);
           }
           return fixedTx;
