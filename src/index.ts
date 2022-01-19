@@ -23,6 +23,7 @@ import { twitterClient } from "./twitterSetup";
 import { Wallet, Provider } from "@project-serum/anchor";
 import { BigInstructionResult } from "@strata-foundation/spl-utils";
 
+const MIN_LAMPORTS = process.env.MIN_LAMPORTS ? Number(process.env.MIN_LAMPORTS) : 500_000_000 // 0.5 SOL
 const connection = new Connection(process.env.SOLANA_URL!);
 const twitterServiceAccount = Keypair.fromSecretKey(
   new Uint8Array(JSON.parse(process.env.TWITTER_SERVICE_ACCOUNT!))
@@ -121,12 +122,22 @@ async function claimHandleInstructions({
   };
 }
 
+async function hasEnoughFunds(publicKey: PublicKey): Promise<boolean> {
+  const lamports = (await connection.getAccountInfo(publicKey))?.lamports;
+
+  return (lamports || 0) >= MIN_LAMPORTS
+}
+
 app.post<{ Body: IClaimHandleArgs }>("/twitter/oauth", async (req) => {
   const { instructions, signers } = await claimHandleInstructions(req.body);
+  const hasFunds = await hasEnoughFunds(payerServiceAccount.publicKey);
+  if (!hasFunds) {
+    console.warn("Payer service account is out of funds, having caller pay");
+  }
 
   const transaction = new Transaction({
     recentBlockhash: (await connection.getRecentBlockhash()).blockhash,
-    feePayer: payerServiceAccount.publicKey,
+    feePayer: hasFunds ? payerServiceAccount.publicKey : new PublicKey(req.body.pubkey),
   });
   transaction.add(...instructions);
   transaction.partialSign(twitterServiceAccount);
@@ -137,7 +148,12 @@ app.post<{ Body: IClaimHandleArgs }>("/twitter/oauth", async (req) => {
   const fixedTx = Transaction.from(
     transaction.serialize({ requireAllSignatures: false })
   );
-  fixedTx.partialSign(...signers, payerServiceAccount);
+  if (signers.length > 0) {
+    fixedTx.partialSign(...signers);
+  }
+  if (hasFunds) {
+    fixedTx.partialSign(payerServiceAccount);
+  }
   return fixedTx
     .serialize({ requireAllSignatures: false, verifySignatures: false })
     .toJSON();
@@ -172,6 +188,11 @@ app.post<{ Body: IClaimHandleArgs }>(
     const { instructions: handleInstructions, signers: handleSigners } =
       await claimHandleInstructions(req.body);
     const tokenCollectiveSdk = await SplTokenCollective.init(provider);
+
+    const hasFunds = await hasEnoughFunds(payerServiceAccount.publicKey);
+    if (!hasFunds) {
+      console.warn("Payer service account is out of funds, having caller pay");
+    }
 
     const name = await getTwitterRegistryKey(twitterHandle, twitterTld);
     const claimedTokenRefKey = (
@@ -213,6 +234,10 @@ app.post<{ Body: IClaimHandleArgs }>(
           buyTargetRoyaltyPercentage: 5,
           sellBaseRoyaltyPercentage: 0,
           sellTargetRoyaltyPercentage: 0,
+          buyBaseRoyaltiesOwner: owner,
+          sellBaseRoyaltiesOwner: owner,
+          buyTargetRoyaltiesOwner: owner,
+          sellTargetRoyaltiesOwner: owner
         },
       };
 
@@ -225,7 +250,7 @@ app.post<{ Body: IClaimHandleArgs }>(
           authority: owner,
           tokenRef: unclaimedTokenRefKey,
           symbol,
-          ignoreMissingName: true,
+          ignoreMissingName: true
         });
       instructionResult = {
         instructions: [regularInstructionResult.instructions],
@@ -247,7 +272,7 @@ app.post<{ Body: IClaimHandleArgs }>(
         const signers = signerGroups[index];
         if (instructions.length > 0) {
           const tx = new Transaction({
-            feePayer: payerServiceAccount.publicKey,
+            feePayer: hasFunds ? payerServiceAccount.publicKey : owner,
             recentBlockhash,
           });
           tx.add(...instructions);
@@ -257,7 +282,12 @@ app.post<{ Body: IClaimHandleArgs }>(
           const fixedTx = Transaction.from(
             tx.serialize({ requireAllSignatures: false })
           );
-          fixedTx.partialSign(...signers, payerServiceAccount);
+          if (signers.length > 0) {
+            fixedTx.partialSign(...signers);
+          }
+          if (hasFunds) {
+            fixedTx.partialSign(payerServiceAccount);
+          }
           return fixedTx;
         }
       })

@@ -24,7 +24,7 @@ const serviceAccount = Keypair.fromSecretKey(
 
 async function run(): Promise<void> {
   const connection = new Connection(process.env.SOLANA_URL!);
-  const name = `noah-claim-test-4`;
+  const name = `noah-claim-test-5`;
   const nameTld = await getNameAccountKey(await getHashedName(name));
   console.log("Using wallet", serviceAccount.publicKey.toBase58());
   console.log(`Going to create tld ${name} at ${nameTld.toBase58()}`);
