@@ -165,7 +165,7 @@ app.post<{ Body: IClaimHandleArgs }>("/twitter/oauth", async (req) => {
   if (fixedTx.signatures.some(sig => sig.publicKey.equals(payerServiceAccount.publicKey))) {
     fixedTx.partialSign(payerServiceAccount);
   }
-  return transaction
+  return fixedTx
     .serialize({ requireAllSignatures: false, verifySignatures: false })
     .toJSON();
 });
