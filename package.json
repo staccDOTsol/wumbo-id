@@ -17,6 +17,7 @@
     "bootstrap": "npm run build && node dist/bootstrap.js"
   },
   "dependencies": {
+    "@solana/web3.js": "^1.32.0",
     "@strata-foundation/spl-token-collective": "2.1.2",
     "@types/auth0": "^2.33.5",
     "@types/axios": "^0.14.0",

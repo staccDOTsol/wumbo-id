@@ -12,16 +12,21 @@ import {
   ICreateSocialTokenArgs,
   SplTokenCollective,
 } from "@strata-foundation/spl-token-collective";
+import {
+  SplTokenMetadata
+} from "@strata-foundation/spl-utils";
 import { deserializeUnchecked } from "borsh";
 import Fastify from "fastify";
 import { auth0 } from "./auth0Setup";
 import {
   createVerifiedTwitterRegistry,
   getTwitterRegistryKey,
+  createReverseTwitterRegistry
 } from "./nameServiceTwitter";
 import { twitterClient } from "./twitterSetup";
 import { Wallet, Provider } from "@project-serum/anchor";
 import { BigInstructionResult } from "@strata-foundation/spl-utils";
+import { deleteInstruction, transferNameOwnership, getHashedName, getNameAccountKey, ReverseTwitterRegistryState } from "@solana/spl-name-service";
 
 const MIN_LAMPORTS = process.env.MIN_LAMPORTS ? Number(process.env.MIN_LAMPORTS) : 500_000_000 // 0.5 SOL
 const connection = new Connection(process.env.SOLANA_URL!);
@@ -67,6 +72,10 @@ interface IClaimHandleArgs {
   twitterHandle: string;
 }
 
+interface IRelinkArgs {
+  newWallet: string;
+  prevWallet: string;
+}
 
 async function hasEnoughFunds(publicKey: PublicKey): Promise<boolean> {
   const lamports = (await connection.getAccountInfo(publicKey))?.lamports;
@@ -122,7 +131,7 @@ async function claimHandleInstructions({
     32,
     payer,
     NAME_PROGRAM_ID,
-    payer,
+    twitterServiceAccount.publicKey,
     twitterTld
   );
 
@@ -144,21 +153,19 @@ app.post<{ Body: IClaimHandleArgs }>("/twitter/oauth", async (req) => {
     feePayer: hasFunds ? payerServiceAccount.publicKey : new PublicKey(req.body.pubkey),
   });
   transaction.add(...instructions);
-  transaction.partialSign(twitterServiceAccount);
+  // Signatures is empty if we don't do this
+  const fixedTx = Transaction.from(transaction.serialize({ verifySignatures: false, requireAllSignatures: false }));
+  if (fixedTx.signatures.some(sig => sig.publicKey.equals(twitterServiceAccount.publicKey))) {
+    fixedTx.partialSign(twitterServiceAccount);
+  }
 
-  // https://github.com/solana-labs/solana/issues/21722
-  // I wouldn't wish this bug on my worst enemies. If we don't do this hack, any time our txns are signed, then serialized, then deserialized,
-  // then reserialized, they will break.
-  const fixedTx = Transaction.from(
-    transaction.serialize({ requireAllSignatures: false })
-  );
   if (signers.length > 0) {
     fixedTx.partialSign(...signers);
   }
-  if (transaction.signatures.some(sig => sig.publicKey.equals(payerServiceAccount.publicKey))) {
+  if (fixedTx.signatures.some(sig => sig.publicKey.equals(payerServiceAccount.publicKey))) {
     fixedTx.partialSign(payerServiceAccount);
   }
-  return fixedTx
+  return transaction
     .serialize({ requireAllSignatures: false, verifySignatures: false })
     .toJSON();
 });
@@ -183,6 +190,159 @@ type Truthy<T> = T extends false | "" | 0 | null | undefined ? never : T; // fro
 function truthy<T>(value: T): value is Truthy<T> {
   return !!value;
 }
+
+async function getTwitterReverse(
+  connection: Connection,
+  owner: PublicKey
+): Promise<ReverseTwitterRegistryState> {
+  const hashedName = await getHashedName(owner.toString());
+
+  const key = await getNameAccountKey(
+    hashedName,
+    twitterServiceAccount.publicKey,
+    twitterTld
+  );
+
+  const reverseTwitterAccount = await connection.getAccountInfo(key);
+  if (!reverseTwitterAccount) {
+    throw new Error("Invalid reverse Twitter account provided");
+  }
+  return deserializeUnchecked(
+    ReverseTwitterRegistryState.schema,
+    ReverseTwitterRegistryState,
+    reverseTwitterAccount.data.slice(NameRegistryState.HEADER_LEN)
+  );
+}
+
+app.post<{Body: IRelinkArgs }>(
+  "/relink",
+  async (req) => {
+    const { newWallet: newWalletRaw, prevWallet: prevWalletRaw } = req.body;
+    const newWallet = new PublicKey(newWalletRaw);
+    const prevWallet = new PublicKey(prevWalletRaw);
+    const tokenCollectiveSdk = await SplTokenCollective.init(provider);
+    const tokenMetadataSdk = await SplTokenMetadata.init(provider);
+
+    const claimedTokenRef = (await SplTokenCollective.ownerTokenRefKey({
+      isPrimary: true,
+      owner: prevWallet
+    }))[0];
+    const tokenRefAcct = await tokenCollectiveSdk.getTokenRef(claimedTokenRef);
+    const connection = tokenCollectiveSdk.provider.connection;
+  
+    const reverseTwitterHashedName = await getHashedName(prevWallet.toString());
+    const reverseTwitterName = await getNameAccountKey(
+      reverseTwitterHashedName,
+      twitterServiceAccount.publicKey,
+      twitterTld
+    );
+  
+    const instructions: TransactionInstruction[] = [];
+    const signers = [];
+    if (tokenRefAcct) {
+      const mintTokenRef = (await SplTokenCollective.mintTokenRefKey(tokenRefAcct.mint))[0];
+      const { instructions: updateOwnerInstrs, signers: updateOwnerSigners, output: { ownerTokenRef } } = await tokenCollectiveSdk.updateOwnerInstructions({
+        payer: prevWallet,
+        tokenRef: claimedTokenRef,
+        newOwner: newWallet
+      });
+      const { instructions: updateAuthorityInstrs, signers: updateAuthoritySigners } = await tokenCollectiveSdk.updateAuthorityInstructions({
+        payer: prevWallet,
+        tokenRef: mintTokenRef,
+        owner: newWallet,
+        newAuthority: newWallet
+      });
+      const { instructions: updateMetadataInstrs, signers: updateMetadataSigners } = await tokenMetadataSdk.updateMetadataInstructions({
+        metadata: tokenRefAcct.tokenMetadata,
+        authority: newWallet
+      });
+
+      const { instructions: setAsPrimaryInstrs, signers: setAsPrimarySigners } = await tokenCollectiveSdk.setAsPrimaryInstructions({
+        tokenRef: mintTokenRef,
+        owner: newWallet,
+        payer: prevWallet 
+      });
+
+      instructions.push(
+        ...updateOwnerInstrs,
+        ...updateAuthorityInstrs,
+        ...updateMetadataInstrs,
+        ...setAsPrimaryInstrs
+      );
+      signers.push(
+        ...updateOwnerSigners,
+        ...updateAuthoritySigners,
+        ...updateMetadataSigners,
+        ...setAsPrimarySigners
+      )
+    }
+  
+    if (await connection.getAccountInfo(reverseTwitterName)) {
+      signers.push(twitterServiceAccount);
+      const reverseRegistry = await getTwitterReverse(connection, prevWallet);
+      const handle = reverseRegistry.twitterHandle;
+      instructions.push(
+        await deleteInstruction(
+          NAME_PROGRAM_ID,
+          reverseTwitterName,
+          prevWallet,
+          prevWallet
+        )
+      )
+      const hashedTwitterHandle = await getHashedName(handle);
+      const twitterHandleRegistryKey = await getNameAccountKey(
+        hashedTwitterHandle,
+        undefined,
+        twitterTld
+      );
+    
+      instructions.push(
+        ...await createReverseTwitterRegistry(
+          connection,
+          handle,
+          twitterHandleRegistryKey,
+          newWallet,
+          prevWallet,
+          NAME_PROGRAM_ID,
+          twitterServiceAccount.publicKey,
+          twitterTld
+        )
+      )
+      instructions.push(
+        await transferNameOwnership(
+          connection,
+          handle,
+          newWallet,
+          undefined,
+          twitterTld
+        )
+      )
+    }
+    const recentBlockhash = (
+      await provider.connection.getRecentBlockhash("confirmed")
+    ).blockhash;
+    const tx = new Transaction({
+      recentBlockhash,
+      feePayer: prevWallet
+    });
+
+    tx.add(...instructions);
+
+    // https://github.com/solana-labs/solana/issues/21722
+    // I wouldn't wish this bug on my worst enemies. If we don't do this hack, any time our txns are signed, then serialized, then deserialized,
+    // then reserialized, they will break.
+    const fixedTx = Transaction.from(
+      tx.serialize({ requireAllSignatures: false })
+    );
+    if (signers.length > 0) {
+      fixedTx.partialSign(...signers);
+    }
+
+    return fixedTx
+    .serialize({ requireAllSignatures: false, verifySignatures: true })
+    .toJSON()
+  }
+)
 
 app.post<{ Body: IClaimHandleArgs }>(
   "/twitter/claim-or-create",
@@ -280,16 +440,12 @@ app.post<{ Body: IClaimHandleArgs }>(
             recentBlockhash,
           });
           tx.add(...instructions);
-          // https://github.com/solana-labs/solana/issues/21722
-          // I wouldn't wish this bug on my worst enemies. If we don't do this hack, any time our txns are signed, then serialized, then deserialized,
-          // then reserialized, they will break.
-          const fixedTx = Transaction.from(
-            tx.serialize({ requireAllSignatures: false })
-          );
+          // Signatures is empty if we don't do this
+          const fixedTx = Transaction.from(tx.serialize({ verifySignatures: false, requireAllSignatures: false }))
           if (signers.length > 0) {
             fixedTx.partialSign(...signers);
           }
-          if (tx.signatures.some(sig => sig.publicKey.equals(payerServiceAccount.publicKey))) {
+          if (fixedTx.signatures.some(sig => sig.publicKey.equals(payerServiceAccount.publicKey))) {
             fixedTx.partialSign(payerServiceAccount);
           }
           return fixedTx;
