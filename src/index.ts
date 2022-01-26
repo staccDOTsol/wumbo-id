@@ -12,16 +12,25 @@ import {
   ICreateSocialTokenArgs,
   SplTokenCollective,
 } from "@strata-foundation/spl-token-collective";
+import {
+  SplTokenBonding,
+} from "@strata-foundation/spl-token-bonding";
+import {
+  SplTokenMetadata
+} from "@strata-foundation/spl-utils";
 import { deserializeUnchecked } from "borsh";
-import Fastify from "fastify";
+import Fastify, { fastify } from "fastify";
 import { auth0 } from "./auth0Setup";
 import {
   createVerifiedTwitterRegistry,
   getTwitterRegistryKey,
+  createReverseTwitterRegistry
 } from "./nameServiceTwitter";
 import { twitterClient } from "./twitterSetup";
 import { Wallet, Provider } from "@project-serum/anchor";
 import { BigInstructionResult } from "@strata-foundation/spl-utils";
+import { deleteInstruction, transferNameOwnership, getHashedName, getNameAccountKey, ReverseTwitterRegistryState } from "@solana/spl-name-service";
+import { ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 const MIN_LAMPORTS = process.env.MIN_LAMPORTS ? Number(process.env.MIN_LAMPORTS) : 500_000_000 // 0.5 SOL
 const connection = new Connection(process.env.SOLANA_URL!);
@@ -39,7 +48,20 @@ const feeWallet = new PublicKey(process.env.FEE_WALLET!);
 const goLiveUnixTime = Number(process.env.GO_LIVE!);
 
 console.log("Using payer: ", payerServiceAccount.publicKey.toBase58());
-export const app = Fastify();
+export const app = Fastify({
+  logger: true
+});
+
+app.setErrorHandler((error, req, reply) => {
+  if (error) {
+    console.error(error.stack);
+    reply.code(error.statusCode || 500).type("application/json").send({
+      message: error.message
+    });
+    return;
+  }
+  reply.send(error);
+});
 
 app.register(require("fastify-cors"), {
   origin: (origin: any, cb: any) => {
@@ -67,6 +89,10 @@ interface IClaimHandleArgs {
   twitterHandle: string;
 }
 
+interface IRelinkArgs {
+  newWallet: string;
+  prevWallet: string;
+}
 
 async function hasEnoughFunds(publicKey: PublicKey): Promise<boolean> {
   const lamports = (await connection.getAccountInfo(publicKey))?.lamports;
@@ -122,7 +148,7 @@ async function claimHandleInstructions({
     32,
     payer,
     NAME_PROGRAM_ID,
-    payer,
+    twitterServiceAccount.publicKey,
     twitterTld
   );
 
@@ -144,18 +170,16 @@ app.post<{ Body: IClaimHandleArgs }>("/twitter/oauth", async (req) => {
     feePayer: hasFunds ? payerServiceAccount.publicKey : new PublicKey(req.body.pubkey),
   });
   transaction.add(...instructions);
-  transaction.partialSign(twitterServiceAccount);
+  // Signatures is empty if we don't do this
+  const fixedTx = Transaction.from(transaction.serialize({ verifySignatures: false, requireAllSignatures: false }));
+  if (fixedTx.signatures.some(sig => sig.publicKey.equals(twitterServiceAccount.publicKey))) {
+    fixedTx.partialSign(twitterServiceAccount);
+  }
 
-  // https://github.com/solana-labs/solana/issues/21722
-  // I wouldn't wish this bug on my worst enemies. If we don't do this hack, any time our txns are signed, then serialized, then deserialized,
-  // then reserialized, they will break.
-  const fixedTx = Transaction.from(
-    transaction.serialize({ requireAllSignatures: false })
-  );
   if (signers.length > 0) {
     fixedTx.partialSign(...signers);
   }
-  if (transaction.signatures.some(sig => sig.publicKey.equals(payerServiceAccount.publicKey))) {
+  if (fixedTx.signatures.some(sig => sig.publicKey.equals(payerServiceAccount.publicKey))) {
     fixedTx.partialSign(payerServiceAccount);
   }
   return fixedTx
@@ -183,6 +207,224 @@ type Truthy<T> = T extends false | "" | 0 | null | undefined ? never : T; // fro
 function truthy<T>(value: T): value is Truthy<T> {
   return !!value;
 }
+
+async function getTwitterReverse(
+  connection: Connection,
+  owner: PublicKey
+): Promise<ReverseTwitterRegistryState> {
+  const hashedName = await getHashedName(owner.toString());
+
+  const key = await getNameAccountKey(
+    hashedName,
+    twitterServiceAccount.publicKey,
+    twitterTld
+  );
+
+  const reverseTwitterAccount = await connection.getAccountInfo(key);
+  if (!reverseTwitterAccount) {
+    throw new Error("Invalid reverse Twitter account provided");
+  }
+  return deserializeUnchecked(
+    ReverseTwitterRegistryState.schema,
+    ReverseTwitterRegistryState,
+    reverseTwitterAccount.data.slice(NameRegistryState.HEADER_LEN)
+  );
+}
+
+app.post<{Body: IRelinkArgs }>(
+  "/relink",
+  async (req, reply) => {
+    const { newWallet: newWalletRaw, prevWallet: prevWalletRaw } = req.body;
+    const newWallet = new PublicKey(newWalletRaw);
+    const prevWallet = new PublicKey(prevWalletRaw);
+    const tokenCollectiveSdk = await SplTokenCollective.init(provider);
+    const tokenBondingSdk = await SplTokenBonding.init(provider);
+    const tokenMetadataSdk = await SplTokenMetadata.init(provider);
+
+    const claimedTokenRef = (await SplTokenCollective.ownerTokenRefKey({
+      isPrimary: true,
+      owner: prevWallet
+    }))[0];
+    const tokenRefAcct = await tokenCollectiveSdk.getTokenRef(claimedTokenRef);
+    const connection = tokenCollectiveSdk.provider.connection;
+  
+    const reverseTwitterHashedName = await getHashedName(prevWallet.toString());
+    const reverseTwitterName = await getNameAccountKey(
+      reverseTwitterHashedName,
+      twitterServiceAccount.publicKey,
+      twitterTld
+    );
+  
+    const instructions: TransactionInstruction[][] = [[], [], []];
+    const signers: Signer[][] = [[], [], []];
+    if (tokenRefAcct) {
+      const tokenBondingAcct = (await tokenBondingSdk.getTokenBonding(tokenRefAcct.tokenBonding!))!;
+      const mintTokenRef = (await SplTokenCollective.mintTokenRefKey(tokenRefAcct.mint))[0];
+      const { instructions: updateOwnerInstrs, signers: updateOwnerSigners, output: { ownerTokenRef } } = await tokenCollectiveSdk.updateOwnerInstructions({
+        payer: prevWallet,
+        tokenRef: claimedTokenRef,
+        newOwner: newWallet
+      });
+      const { instructions: updateAuthorityInstrs, signers: updateAuthoritySigners } = await tokenCollectiveSdk.updateAuthorityInstructions({
+        payer: prevWallet,
+        tokenRef: mintTokenRef,
+        owner: newWallet,
+        newAuthority: newWallet
+      });
+      const { instructions: updateMetadataInstrs, signers: updateMetadataSigners } = await tokenMetadataSdk.updateMetadataInstructions({
+        metadata: tokenRefAcct.tokenMetadata,
+        newAuthority: newWallet
+      });
+
+      const defaultBaseRoyalties = await Token.getAssociatedTokenAddress(
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+        TOKEN_PROGRAM_ID,
+        tokenBondingAcct?.baseMint,
+        newWallet
+      );
+      const defaultTargetRoyalties = await Token.getAssociatedTokenAddress(
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+        TOKEN_PROGRAM_ID,
+        tokenBondingAcct.targetMint,
+        newWallet
+      );
+  
+      if (
+        !(await tokenBondingSdk.accountExists(defaultTargetRoyalties))
+      ) {
+        console.log(`Creating target royalties ${defaultTargetRoyalties}...`);
+        instructions[0].push(
+          Token.createAssociatedTokenAccountInstruction(
+            ASSOCIATED_TOKEN_PROGRAM_ID,
+            TOKEN_PROGRAM_ID,
+            tokenBondingAcct.targetMint,
+            defaultTargetRoyalties,
+            newWallet,
+            prevWallet
+          )
+        );
+      }
+  
+      if (
+        !(await tokenBondingSdk.accountExists(defaultBaseRoyalties))
+      ) {
+        console.log(`Creating base royalties ${defaultBaseRoyalties}...`);
+        instructions[0].push(
+          Token.createAssociatedTokenAccountInstruction(
+            ASSOCIATED_TOKEN_PROGRAM_ID,
+            TOKEN_PROGRAM_ID,
+            tokenBondingAcct.baseMint,
+            defaultBaseRoyalties,
+            newWallet,
+            prevWallet
+          )
+        );
+      }
+
+      const { instructions: updateBondingInstrs, signers: updateBondingSigners } = await tokenCollectiveSdk.updateTokenBondingInstructions({
+        tokenRef: mintTokenRef,
+        buyBaseRoyalties: defaultBaseRoyalties,
+        buyTargetRoyalties: defaultTargetRoyalties,
+        sellBaseRoyalties: defaultBaseRoyalties,
+        sellTargetRoyalties: defaultTargetRoyalties
+      });
+    
+      instructions[1].push(
+        ...updateBondingInstrs
+      )
+      signers[1].push(
+        ...updateBondingSigners
+      )
+
+      instructions[2].push(
+        ...updateMetadataInstrs,
+        ...updateOwnerInstrs,
+        ...updateAuthorityInstrs,
+      );
+      signers[2].push(
+        ...updateMetadataSigners,
+        ...updateOwnerSigners,
+        ...updateAuthoritySigners,
+      )
+    }
+  
+    if (await connection.getAccountInfo(reverseTwitterName)) {
+      signers[2].push(twitterServiceAccount);
+      const reverseRegistry = await getTwitterReverse(connection, prevWallet);
+      const handle = reverseRegistry.twitterHandle;
+      instructions[2].push(
+        await deleteInstruction(
+          NAME_PROGRAM_ID,
+          reverseTwitterName,
+          prevWallet,
+          prevWallet
+        )
+      )
+      const hashedTwitterHandle = await getHashedName(handle);
+      const twitterHandleRegistryKey = await getNameAccountKey(
+        hashedTwitterHandle,
+        undefined,
+        twitterTld
+      );
+    
+      instructions[2].push(
+        ...await createReverseTwitterRegistry(
+          connection,
+          handle,
+          twitterHandleRegistryKey,
+          newWallet,
+          prevWallet,
+          NAME_PROGRAM_ID,
+          twitterServiceAccount.publicKey,
+          twitterTld
+        )
+      )
+      instructions[2].push(
+        await transferNameOwnership(
+          connection,
+          handle,
+          newWallet,
+          undefined,
+          twitterTld
+        )
+      )
+    }
+
+    if (instructions[2].length == 0) {
+      return reply.code(404).send({message: `No token found for wallet ${prevWallet.toBase58()}`})
+    }
+
+    const recentBlockhash = (
+      await provider.connection.getRecentBlockhash("confirmed")
+    ).blockhash;
+
+    return instructions.map((instructions, index) => {
+      const sigs = signers[index];
+      if (instructions.length > 0) {
+        const tx = new Transaction({
+          recentBlockhash,
+          feePayer: prevWallet
+        });
+    
+        tx.add(...instructions);
+    
+        // https://github.com/solana-labs/solana/issues/21722
+        // I wouldn't wish this bug on my worst enemies. If we don't do this hack, any time our txns are signed, then serialized, then deserialized,
+        // then reserialized, they will break.
+        const fixedTx = Transaction.from(
+          tx.serialize({ requireAllSignatures: false })
+        );
+        if (sigs.length > 0) {
+          fixedTx.partialSign(...sigs);
+        }
+    
+        return fixedTx
+        .serialize({ requireAllSignatures: false, verifySignatures: true })
+        .toJSON()
+      }
+    }).filter(truthy)
+  }
+)
 
 app.post<{ Body: IClaimHandleArgs }>(
   "/twitter/claim-or-create",
@@ -248,7 +490,7 @@ app.post<{ Body: IClaimHandleArgs }>(
       instructionResult =
         await tokenCollectiveSdk!.createSocialTokenInstructions(args);
     } else if (!claimedTokenRef) {
-      const regularInstructionResult =
+      instructionResult =
         await tokenCollectiveSdk!.claimSocialTokenInstructions({
           owner,
           authority: owner,
@@ -256,11 +498,6 @@ app.post<{ Body: IClaimHandleArgs }>(
           symbol,
           ignoreMissingName: true
         });
-      instructionResult = {
-        instructions: [regularInstructionResult.instructions],
-        signers: [regularInstructionResult.signers],
-        output: null,
-      };
     }
     const instructionGroups = [
       handleInstructions,
@@ -280,16 +517,12 @@ app.post<{ Body: IClaimHandleArgs }>(
             recentBlockhash,
           });
           tx.add(...instructions);
-          // https://github.com/solana-labs/solana/issues/21722
-          // I wouldn't wish this bug on my worst enemies. If we don't do this hack, any time our txns are signed, then serialized, then deserialized,
-          // then reserialized, they will break.
-          const fixedTx = Transaction.from(
-            tx.serialize({ requireAllSignatures: false })
-          );
+          // Signatures is empty if we don't do this
+          const fixedTx = Transaction.from(tx.serialize({ verifySignatures: false, requireAllSignatures: false }))
           if (signers.length > 0) {
             fixedTx.partialSign(...signers);
           }
-          if (tx.signatures.some(sig => sig.publicKey.equals(payerServiceAccount.publicKey))) {
+          if (fixedTx.signatures.some(sig => sig.publicKey.equals(payerServiceAccount.publicKey))) {
             fixedTx.partialSign(payerServiceAccount);
           }
           return fixedTx;
