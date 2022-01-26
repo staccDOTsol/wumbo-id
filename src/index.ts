@@ -273,7 +273,7 @@ app.post<{Body: IRelinkArgs }>(
       });
       const { instructions: updateMetadataInstrs, signers: updateMetadataSigners } = await tokenMetadataSdk.updateMetadataInstructions({
         metadata: tokenRefAcct.tokenMetadata,
-        authority: newWallet
+        newAuthority: newWallet
       });
 
       const defaultBaseRoyalties = await Token.getAssociatedTokenAddress(
@@ -490,7 +490,7 @@ app.post<{ Body: IClaimHandleArgs }>(
       instructionResult =
         await tokenCollectiveSdk!.createSocialTokenInstructions(args);
     } else if (!claimedTokenRef) {
-      const regularInstructionResult =
+      instructionResult =
         await tokenCollectiveSdk!.claimSocialTokenInstructions({
           owner,
           authority: owner,
@@ -498,11 +498,6 @@ app.post<{ Body: IClaimHandleArgs }>(
           symbol,
           ignoreMissingName: true
         });
-      instructionResult = {
-        instructions: [regularInstructionResult.instructions],
-        signers: [regularInstructionResult.signers],
-        output: null,
-      };
     }
     const instructionGroups = [
       handleInstructions,
