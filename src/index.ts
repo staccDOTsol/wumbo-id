@@ -27,7 +27,8 @@ import {
   createReverseTwitterRegistry
 } from "./nameServiceTwitter";
 import { twitterClient } from "./twitterSetup";
-import { Wallet, Provider } from "@project-serum/anchor";
+import { Provider } from "@project-serum/anchor";
+import Wallet from "@project-serum/anchor/dist/cjs/nodewallet";
 import { BigInstructionResult } from "@strata-foundation/spl-utils";
 import { deleteInstruction, transferNameOwnership, getHashedName, getNameAccountKey, ReverseTwitterRegistryState } from "@solana/spl-name-service";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID } from "@solana/spl-token";
@@ -100,6 +101,14 @@ async function hasEnoughFunds(publicKey: PublicKey): Promise<boolean> {
   return (lamports || 0) >= MIN_LAMPORTS
 }
 
+class ForbiddenError extends Error {
+  statusCode: number = 403;
+
+  constructor(message?: string) {
+    super(message); 
+  }
+}
+
 async function claimHandleInstructions({
   pubkey,
   code,
@@ -110,11 +119,24 @@ async function claimHandleInstructions({
   signers: Signer[];
 }> {
   const name = await getTwitterRegistry(twitterHandle);
-  if (name) {
+  try {
+    const reverse = await getTwitterReverse(connection, new PublicKey(pubkey));
+    if (reverse.twitterHandle !== twitterHandle) {
+      throw new ForbiddenError(`Wallet ${pubkey} is already registered to handle ${reverse.twitterHandle}`)
+    }
+  } catch (e: any) {
+    // We expect invalid to happen, this is good.
+    if (e.message != "Invalid reverse Twitter account provided") {
+      throw e;
+    }
+  }
+  if (name && name.owner.toBase58() == pubkey) {
     return {
       instructions: [],
       signers: [],
     };
+  } else if (name && name.owner.toBase58() != pubkey) {
+    throw new ForbiddenError(`Name is already owned by wallet ${name.owner.toBase58()}`);
   }
 
   if (!process.env.IS_DEV) {
