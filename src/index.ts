@@ -70,6 +70,14 @@ app.register(require("fastify-cors"), {
   },
 });
 
+function extractTweets(str: string | undefined): string[] {
+  if (!str) {
+    return [];
+  }
+
+  return str.split("|");
+}
+
 app.get("/config", async () => {
   return {
     tlds: {
@@ -78,8 +86,13 @@ app.get("/config", async () => {
     verifiers: {
       twitter: twitterServiceAccount.publicKey.toBase58(),
     },
+    tweets: {
+      swap: extractTweets(process.env.SWAP_TWEETS),
+      mint: extractTweets(process.env.MINT_TWEETS),
+      claim: extractTweets(process.env.CLAIM_TWEETS),
+    },
     feeWallet: feeWallet.toBase58(),
-    goLiveUnixTime
+    goLiveUnixTime,
   };
 });
 

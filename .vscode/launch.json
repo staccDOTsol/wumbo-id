@@ -39,6 +39,9 @@
         "${workspaceFolder}/dist/**/*.js"
       ],
       "env": {
+        "SWAP_TWEETS": "Just grabbed a bag of @{handle}'s #socialtoken on @TeamWumbo because...|Loaded up on @{handle}'s #socialtoken using @TeamWumbo so I could...|Talent scouted @{handle}'s #socialtoken on @TeamWumbo because ...|Just became a whale of @{handle}'s #socialtoken whale on @TeamWumbo because ...",
+        "MINT_TWEETS": "Hey @{handle}, I created a #socialtoken for you on @TeamWumbo. You should claim it so I can ...",
+        "CLAIM_TWEETS": "I just claimed my #socialtoken on @TeamWumbo! You can get it at wum.bo/t/{handle}",
         "SOLANA_URL": "http://127.0.0.1:8899",
         "TWITTER_TLD": "EEbZHaBD4mreYS6enRqytXvXfmRESLWXXrXbtZLWyd6X",
         "TWITTER_SERVICE_ACCOUNT": "[65,132,47,88,190,203,121,144,128,74,168,72,223,142,99,217,37,69,160,251,149,35,244,207,84,215,60,50,97,177,113,194,233,135,171,110,133,84,123,5,221,78,104,240,67,217,2,28,6,229,231,56,141,138,249,55,23,239,192,197,165,117,249,85]",
