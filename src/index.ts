@@ -1,4 +1,9 @@
-import { NameRegistryState, NAME_PROGRAM_ID } from "@bonfida/spl-name-service";
+import {
+  NameRegistryState,
+  NAME_PROGRAM_ID,
+  updateInstruction,
+  Numberu32,
+} from "@bonfida/spl-name-service";
 import {
   Account,
   Connection,
@@ -14,7 +19,7 @@ import {
 } from "@strata-foundation/spl-token-collective";
 import { SplTokenBonding } from "@strata-foundation/spl-token-bonding";
 import { SplTokenMetadata } from "@strata-foundation/spl-utils";
-import { deserializeUnchecked } from "borsh";
+import { serialize, deserializeUnchecked } from "borsh";
 import Fastify, { fastify } from "fastify";
 import { auth0 } from "./auth0Setup";
 import {
@@ -167,27 +172,9 @@ async function claimHandleInstructions({
     }
   }
 
+  const instructions: TransactionInstruction[] = [];
   const name = await getTwitterRegistry(twitterHandle!);
-  try {
-    const reverse = await getTwitterReverse(connection, new PublicKey(pubkey));
-    if (reverse.twitterHandle !== twitterHandle) {
-      throw new ForbiddenError(
-        `Wallet ${pubkey} is already registered to handle ${reverse.twitterHandle}`
-      );
-    }
-  } catch (e: any) {
-    // We expect invalid to happen, this is good.
-    if (e.message != "Invalid reverse Twitter account provided") {
-      throw e;
-    }
-  }
-  if (name && name.owner.toBase58() == pubkey) {
-    return {
-      instructions: [],
-      signers: [],
-      twitterHandle: twitterHandle!
-    };
-  } else if (name && name.owner.toBase58() != pubkey) {
+  if (name && name.owner.toBase58() != pubkey) {
     throw new ForbiddenError(
       `Name is already owned by wallet ${name.owner.toBase58()}`
     );
@@ -196,8 +183,7 @@ async function claimHandleInstructions({
   const pubKey = new PublicKey(pubkey);
   const hasFunds = await hasEnoughFunds(payerServiceAccount.publicKey);
   const payer = hasFunds ? payerServiceAccount.publicKey : pubKey;
-
-  const instructions = await createVerifiedTwitterRegistry(
+  instructions.push(...await createVerifiedTwitterRegistry(
     connection,
     twitterHandle!,
     pubKey,
@@ -206,7 +192,7 @@ async function claimHandleInstructions({
     NAME_PROGRAM_ID,
     twitterServiceAccount.publicKey,
     twitterTld
-  );
+  ));
 
   return {
     instructions,

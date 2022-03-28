@@ -65,21 +65,26 @@ export async function createVerifiedTwitterRegistry(
     twitterRootParentRegistryKey
   );
 
-  let instructions = [
-    createInstruction(
-      nameProgramId,
-      SystemProgram.programId,
-      twitterHandleRegistryKey,
-      verifiedPubkey,
-      payerKey,
-      hashedTwitterHandle,
-      new Numberu64(await connection.getMinimumBalanceForRentExemption(space)),
-      new Numberu32(space),
-      undefined,
-      twitterRootParentRegistryKey,
-      twitterVerificationAuthority // Twitter authority acts as owner of the parent for all user-facing registries
-    ),
-  ];
+  let instructions = [];
+  if (!(await connection.getAccountInfo(twitterHandleRegistryKey))) {
+    instructions.push(
+      createInstruction(
+        nameProgramId,
+        SystemProgram.programId,
+        twitterHandleRegistryKey,
+        verifiedPubkey,
+        payerKey,
+        hashedTwitterHandle,
+        new Numberu64(
+          await connection.getMinimumBalanceForRentExemption(space)
+        ),
+        new Numberu32(space),
+        undefined,
+        twitterRootParentRegistryKey,
+        twitterVerificationAuthority // Twitter authority acts as owner of the parent for all user-facing registries
+      )
+    );
+  }
 
   instructions = instructions.concat(
     await createReverseTwitterRegistry(
@@ -122,30 +127,39 @@ export async function createReverseTwitterRegistry(
     })
   );
 
-  return [
-    createInstruction(
-      nameProgramId,
-      SystemProgram.programId,
-      reverseRegistryKey,
-      verifiedPubkey,
-      payerKey,
-      hashedVerifiedPubkey,
-      new Numberu64(
-        await connection.getMinimumBalanceForRentExemption(
-          reverseTwitterRegistryStateBuff.length
-        )
-      ),
-      new Numberu32(reverseTwitterRegistryStateBuff.length),
-      twitterVerificationAuthority, // Twitter authority acts as class for all reverse-lookup registries
-      twitterRootParentRegistryKey, // Reverse registries are also children of the root
-      twitterVerificationAuthority
-    ),
+  const exists: boolean = Boolean(await connection.getAccountInfo(reverseRegistryKey));
+  const instructions = [];
+  if (!exists) {
+    instructions.push(
+      createInstruction(
+        nameProgramId,
+        SystemProgram.programId,
+        reverseRegistryKey,
+        verifiedPubkey,
+        payerKey,
+        hashedVerifiedPubkey,
+        new Numberu64(
+          await connection.getMinimumBalanceForRentExemption(
+            reverseTwitterRegistryStateBuff.length
+          )
+        ),
+        new Numberu32(reverseTwitterRegistryStateBuff.length),
+        twitterVerificationAuthority, // Twitter authority acts as class for all reverse-lookup registries
+        twitterRootParentRegistryKey, // Reverse registries are also children of the root
+        twitterVerificationAuthority
+      )
+    );
+  }
+
+  instructions.push(
     updateInstruction(
       nameProgramId,
       reverseRegistryKey,
       new Numberu32(0),
       Buffer.from(reverseTwitterRegistryStateBuff),
       twitterVerificationAuthority
-    ),
-  ];
+    )
+  );
+
+  return instructions;
 }
