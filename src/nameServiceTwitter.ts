@@ -10,15 +10,16 @@ import {
   TWITTER_ROOT_PARENT_REGISTRY_KEY,
   TWITTER_VERIFICATION_AUTHORITY,
   updateInstruction,
-} from "@bonfida/spl-name-service";
+} from "@solana/spl-name-service";
 import {
   Connection,
   PublicKey,
   SystemProgram,
   TransactionInstruction,
 } from "@solana/web3.js";
-import BN from "bn.js";
 import { serialize } from "borsh";
+
+const RENT_EXEMPT_PAD = 2;
 
 export async function getTwitterRegistryKey(
   handle: string,
@@ -31,7 +32,7 @@ export async function getTwitterRegistryKey(
     twitterRootParentRegistryKey
   );
 
-  return twitterHandleRegistryKey
+  return twitterHandleRegistryKey;
 }
 
 export async function getTwitterRegistry(
@@ -39,11 +40,11 @@ export async function getTwitterRegistry(
   twitter_handle: string,
   twitterRootParentRegistryKey: PublicKey = TWITTER_ROOT_PARENT_REGISTRY_KEY
 ): Promise<NameRegistryState> {
-  const key = await getTwitterRegistryKey(twitter_handle, twitterRootParentRegistryKey)
-  const registry = NameRegistryState.retrieve(
-    connection,
-    key
+  const key = await getTwitterRegistryKey(
+    twitter_handle,
+    twitterRootParentRegistryKey
   );
+  const registry = NameRegistryState.retrieve(connection, key);
   return registry;
 }
 
@@ -76,7 +77,8 @@ export async function createVerifiedTwitterRegistry(
         payerKey,
         hashedTwitterHandle,
         new Numberu64(
-          await connection.getMinimumBalanceForRentExemption(space)
+          (await connection.getMinimumBalanceForRentExemption(space)) *
+            RENT_EXEMPT_PAD
         ),
         new Numberu32(space),
         undefined,
@@ -127,7 +129,9 @@ export async function createReverseTwitterRegistry(
     })
   );
 
-  const exists: boolean = Boolean(await connection.getAccountInfo(reverseRegistryKey));
+  const exists: boolean = Boolean(
+    await connection.getAccountInfo(reverseRegistryKey)
+  );
   const instructions = [];
   if (!exists) {
     instructions.push(
@@ -139,9 +143,9 @@ export async function createReverseTwitterRegistry(
         payerKey,
         hashedVerifiedPubkey,
         new Numberu64(
-          await connection.getMinimumBalanceForRentExemption(
+          (await connection.getMinimumBalanceForRentExemption(
             reverseTwitterRegistryStateBuff.length
-          )
+          )) * RENT_EXEMPT_PAD
         ),
         new Numberu32(reverseTwitterRegistryStateBuff.length),
         twitterVerificationAuthority, // Twitter authority acts as class for all reverse-lookup registries
@@ -157,7 +161,8 @@ export async function createReverseTwitterRegistry(
       reverseRegistryKey,
       new Numberu32(0),
       Buffer.from(reverseTwitterRegistryStateBuff),
-      twitterVerificationAuthority
+      twitterVerificationAuthority,
+      undefined
     )
   );
 

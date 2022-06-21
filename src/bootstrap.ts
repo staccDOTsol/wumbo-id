@@ -3,11 +3,10 @@ import {
   getNameAccountKey,
   getHashedName,
   NameRegistryState,
-} from "@bonfida/spl-name-service";
+} from "@solana/spl-name-service";
 import {
   Connection,
   Keypair,
-  sendAndConfirmRawTransaction,
   sendAndConfirmTransaction,
   Transaction,
 } from "@solana/web3.js";
@@ -24,7 +23,7 @@ const serviceAccount = Keypair.fromSecretKey(
 
 async function run(): Promise<void> {
   const connection = new Connection(process.env.SOLANA_URL!);
-  const name = `noah-claim-test-5`;
+  const name = `zyrb-test-5`;
   const nameTld = await getNameAccountKey(await getHashedName(name));
   console.log("Using wallet", serviceAccount.publicKey.toBase58());
   console.log(`Going to create tld ${name} at ${nameTld.toBase58()}`);
@@ -34,13 +33,20 @@ async function run(): Promise<void> {
     const nameTx = new Transaction({
       recentBlockhash: (await connection.getRecentBlockhash()).blockhash,
     });
+
+    const paddedRentExemption =
+      (await connection.getMinimumBalanceForRentExemption(
+        NameRegistryState.HEADER_LEN
+      )) * 2;
+
     nameTx.instructions.push(
       await createNameRegistry(
         connection,
         name,
         NameRegistryState.HEADER_LEN,
         serviceAccount.publicKey, // Payer
-        serviceAccount.publicKey // Owner
+        serviceAccount.publicKey, // Owner
+        paddedRentExemption
       )
     );
     await sendAndConfirmTransaction(connection, nameTx, [serviceAccount]);
