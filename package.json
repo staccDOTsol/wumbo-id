@@ -17,11 +17,13 @@
     "bootstrap": "npm run build && node dist/bootstrap.js"
   },
   "dependencies": {
-    "@project-serum/anchor": "^0.22.0",
+    "@bonfida/spl-name-service": "^3.0.3",
+    "@coral-xyz/anchor": "0.29.0",
+    "@metaplex-foundation/umi": "^0.9.2",
     "@solana/spl-name-service": "^0.1.4",
     "@solana/web3.js": "^1.43.4",
-    "@strata-foundation/spl-token-bonding": "3.8.2",
-    "@strata-foundation/spl-token-collective": "3.8.2",
+    "@strata-foundation/spl-token-bonding": "file:./strata/packages/spl-token-bonding",
+    "@strata-foundation/spl-token-collective": "file:./strata/packages/spl-token-collective",
     "@types/auth0": "^2.33.5",
     "@types/axios": "^0.14.0",
     "@types/twitter": "^1.7.1",

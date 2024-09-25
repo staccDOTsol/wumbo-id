@@ -28,8 +28,7 @@ import {
   createReverseTwitterRegistry,
 } from "./nameServiceTwitter";
 import { twitterClient } from "./twitterSetup";
-import { Provider } from "@project-serum/anchor";
-import Wallet from "@project-serum/anchor/dist/cjs/nodewallet";
+import { AnchorProvider as Provider, Wallet } from "@coral-xyz/anchor";
 import { BigInstructionResult } from "@strata-foundation/spl-utils";
 import {
   deleteInstruction,
@@ -253,6 +252,7 @@ async function getTwitterRegistry(
 
   if (acct) {
     return deserializeUnchecked(
+      // @ts-ignore
       NameRegistryState.schema,
       NameRegistryState,
       acct.data
