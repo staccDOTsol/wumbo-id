@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.cjs.json",
+  "include": ["src"],
+  "compilerOptions": {
+    "outDir": "lib/cjs",
+    "declaration": true,
+    "declarationMap": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+  },
+  "exclude": ["../../node_modules"]
+}

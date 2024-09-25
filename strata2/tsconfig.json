@@ -1,0 +1,33 @@
+{
+  "extends": "./tsconfig.root.json",
+  "references": [
+    {
+      "path": "./packages/accelerator"
+    },
+    {
+      "path": "./packages/fungible-entangler"
+    },
+    {
+      "path": "./packages/governance-cli"
+    },
+    {
+      "path": "./packages/marketplace-sdk"
+    },
+    {
+      "path": "./packages/marketplace-ui"
+    },
+    {
+      "path": "./packages/react"
+    },
+    {
+      "path": "./packages/spl-token-bonding"
+    },
+    {
+      "path": "./packages/spl-token-collective"
+    },
+    {
+      "path": "./packages/spl-utils"
+    },
+    
+  ]
+}

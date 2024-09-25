@@ -1,0 +1,8 @@
+[workspace]
+members = [
+  "programs/*"
+]
+exclude = [
+  "deps/solana-program-library",
+  "deps/metaplex-program-library"
+]

@@ -1,0 +1,64 @@
+{
+  "name": "@strata-foundation/spl-utils",
+  "version": "3.11.2",
+  "description": "Utils shared across spl suite",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/StrataFoundation/strata"
+  },
+  "main": "./lib/cjs/index.js",
+  "module": "./lib/esm/src/index.js",
+  "types": "./lib/types/src/index.d.ts",
+  "sideEffects": false,
+  "files": [
+    "lib"
+  ],
+  "exports": {
+    "import": "./lib/esm/src/index.js",
+    "require": "./lib/cjs/index.js",
+    "types": "./lib/types/src/index.d.ts"
+  },
+  "scripts": {
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "precommit": "npx git-format-staged -f 'prettier --ignore-unknown --stdin --stdin-filepath \"{}\"' .",
+    "clean": "npx shx mkdir -p lib && npx shx rm -rf lib",
+    "package": "npx shx mkdir -p lib/cjs lib/esm",
+    "prebuild": "npm run clean && npm run package"
+  },
+  "dependencies": {
+    "@metaplex-foundation/mpl-token-metadata": "3.2.1",
+    "@metaplex-foundation/mpl-toolbox": "^0.9.4",
+    "@metaplex-foundation/umi": "^0.9.2",
+    "@metaplex-foundation/umi-bundle-defaults": "^0.9.2",
+    "@metaplex-foundation/umi-signer-wallet-adapters": "^0.9.2",
+    "@metaplex-foundation/umi-uploader-irys": "0.8.11",
+    "@metaplex/arweave-cost": "1.0.4",
+    "@project-serum/anchor": "^0.24.2",
+    "@shadow-drive/sdk": "^3.0.8",
+    "@solana/spl-token": "0.1.8",
+    "@solana/web3.js": "^1.95.0",
+    "axios": "^0.27.2",
+    "bn.js": "^5.2.0",
+    "borsh": "^0.7.0",
+    "bs58": "^4.0.1",
+    "eventemitter3": "^4.0.7",
+    "localstorage-memory": "^1.0.3" },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^22.0.1",
+    "@rollup/plugin-json": "^4.1.0",
+    "@rollup/plugin-node-resolve": "^13.3.0",
+    "@rollup/plugin-replace": "^4.0.0",
+    "@rollup/plugin-typescript": "^8.3.4",
+    "rollup": "^2.77.2",
+    "rollup-plugin-auto-external": "^2.0.0",
+    "rollup-plugin-terser": "^7.0.2",
+    "style-loader": "^2.0.0",
+    "ts-loader": "^9.2.3",
+    "typescript": "^4.7.0"
+  },
+  "gitHead": "ff670e6a6211209648c56dd69e5f5dfbda631b42"
+}

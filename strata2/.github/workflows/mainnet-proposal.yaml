@@ -1,0 +1,70 @@
+name: Mainnet Proposal
+
+on:
+  release:
+    types: [published]
+
+env:
+  SOLANA_CLI_VERSION: 1.10.29
+  NODE_VERSION: 17.0.1
+
+jobs:
+  create-bonding-proposal:
+    name: Create Bonding Proposal
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ./.github/actions/deploy-with-gov-proposal/
+        id: deploy
+        with:
+          program: spl_token_bonding
+          program-id: TBondmkCYxaPCKG4CHYfVTcwQ8on31xnJrPzk8F8WsS
+          keypair: ${{ secrets.DEPLOY_KEYPAIR }}
+          network: https://ssc-dao.genesysgo.net
+          governance: HDkW3MrrvqT9FPvuFBAVnSag1BLDx767MD2VXKfpCoCe
+          name: Deploy Token Bonding ${{ github.event.release.tag_name }}
+          description: ${{ github.event.release.url }}
+      - uses: ./.github/actions/anchor-publish/
+        with:
+          program: spl_token_bonding
+          anchor-token: ${{ secrets.ANCHOR_TOKEN }}
+
+  create-collective-proposal:
+    name: Create Collective Proposal
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ./.github/actions/deploy-with-gov-proposal/
+        id: deploy
+        with:
+          program: spl_token_collective
+          program-id: TCo1sfSr2nCudbeJPykbif64rG9K1JNMGzrtzvPmp3y
+          keypair: ${{ secrets.DEPLOY_KEYPAIR }}
+          network: https://ssc-dao.genesysgo.net
+          governance: 6yc2jb7LCjYXD3hbRKjYkpx13j4VXYcCBzYsZbmntdVk
+          name: Deploy Token Collective ${{ github.event.release.tag_name }}
+          description: ${{ github.event.release.url }}
+      - uses: ./.github/actions/anchor-publish/
+        with:
+          program: spl_token_collective
+          anchor-token: ${{ secrets.ANCHOR_TOKEN }}
+
+  create-fungible-entangler-proposal:
+    name: Create Fungible Entangler Proposal
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ./.github/actions/deploy-with-gov-proposal/
+        id: deploy
+        with:
+          program: fungible_entangler
+          program-id: fent99TYZcj9PGbeooaZXEMQzMd7rz8vYFiudd8HevB
+          network: https://ssc-dao.genesysgo.net
+          keypair: ${{ secrets.DEPLOY_KEYPAIR }}
+          governance: C2QmGPr3qFHUXYZdBJn8NEoNz2kcxBm9mwMoGMn2QFdq
+          name: Deploy Fungible Entangler ${{ github.event.release.tag_name }}
+          description: ${{ github.event.release.url }}
+      - uses: ./.github/actions/anchor-publish/
+        with:
+          program: fungible_entangler
+          anchor-token: ${{ secrets.ANCHOR_TOKEN }}

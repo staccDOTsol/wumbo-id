@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.root.json",
+  "references": [
+    {
+      "path": "./tsconfig.cjs.json"
+    },
+    {
+      "path": "./tsconfig.esm.json",
+    },
+  ],
+  "compilerOptions": {
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+  },
+  "exclude": ["../../node_modules"]
+}

@@ -1,0 +1,43 @@
+{
+  "name": "@strata-foundation/cli",
+  "description": "Bootstrapping wumbo",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/StrataFoundation/strata"
+  },
+  "files": [
+    "dist/lib/**/*"
+  ],
+  "scripts": {
+    "copy-files": "copyfiles -u 1 src/**/*.js dist/lib",
+    "watch": "yarn run copy-files && node src/idlToTs",
+    "bootstrap": "tsc --build && node lib/cjs/bootstrap",
+    "flatten-curves": "tsc --build && node lib/cjs/flatten-curves",
+    "bounty-dist": "tsc && node dist/lib/bounty-dist",
+    "create-governance-token": "tsc && node dist/lib/createGovernanceToken",
+    "clean": "npx shx mkdir -p lib && npx shx rm -rf lib",
+    "package": "npx shx mkdir -p lib/cjs lib/esm",
+    "prebuild": "npm run clean && npm run package"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.95.0",
+    "@strata-foundation/spl-token-bonding": "^3.11.2",
+    "@strata-foundation/spl-token-collective": "^3.11.2",
+    "@strata-foundation/spl-utils": "^3.11.2",
+    "bn.js": "^5.2.0",
+    "commander": "^9.2.0",
+    "copyfiles": "^2.4.1",
+    "semver": "^7.3.5"
+  },
+  "devDependencies": {
+    "style-loader": "^2.0.0",
+    "ts-loader": "^9.2.3",
+    "typescript": "^4.7.0"
+  },
+  "gitHead": "4623c709db43b3503af871ddbdf325da202e0e62",
+  "version": "3.11.2"
+}
